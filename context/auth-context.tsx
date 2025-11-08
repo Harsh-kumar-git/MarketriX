@@ -2,12 +2,14 @@
 
 import { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession, signIn, signOut } from "next-auth/react";
 
 type User = {
   id: string;
   name: string;
   email: string;
   role: "admin" | "manager" | "team_member";
+  subscriptionPlan: "free" | "pro" | "business";
   avatar?: string;
 };
 
@@ -15,9 +17,11 @@ type AuthContextType = {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  updateProfile: (data: { name?: string; email?: string }) => Promise<void>;
   isAuthenticated: boolean;
+  subscriptionPlan: string;
 };
 
 const AuthContext = createContext<AuthContextType>({

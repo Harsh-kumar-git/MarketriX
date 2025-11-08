@@ -142,11 +142,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        isLoading,
+        isLoading: isLoading || status === 'loading',
         login,
         logout,
         register,
+        updateProfile,
         isAuthenticated: !!user,
+        subscriptionPlan: user?.subscriptionPlan || 'free',
       }}
     >
       {children}

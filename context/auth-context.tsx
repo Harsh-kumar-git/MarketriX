@@ -34,83 +34,108 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Check if user is logged in on mount
+  // Map session data to user format
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // In a real app, this would be an API call to verify the session
-        const storedUser = localStorage.getItem("marketix-user");
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-      } catch (error) {
-        console.error("Authentication error:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (status === 'loading') return;
 
-    checkAuth();
-  }, []);
+    if (session?.user) {
+      const mappedUser: User = {
+        id: session.user.id,
+        name: session.user.name || '',
+        email: session.user.email || '',
+        role: session.user.role as any || 'team_member',
+        subscriptionPlan: session.user.subscriptionPlan as any || 'free',
+        avatar: session.user.image || undefined,
+      };
+      setUser(mappedUser);
+    } else {
+      setUser(null);
+    }
+    setIsLoading(false);
+  }, [session, status]);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true);
     try {
-      // In a real app, this would be an API call to authenticate
-      // Mock login for demo purposes
-      const mockUser: User = {
-        id: "user-1",
-        name: "Demo User",
-        email: email,
-        role: "admin",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=demo",
-      };
-      
-      // Store user in localStorage for persistence
-      localStorage.setItem("marketix-user", JSON.stringify(mockUser));
-      setUser(mockUser);
-      router.push("/dashboard");
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        throw new Error('Invalid credentials');
+      }
+
+      router.push('/dashboard');
     } catch (error) {
-      console.error("Login error:", error);
+      console.error('Login error:', error);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const register = async (name: string, email: string, password: string) => {
-    setIsLoading(true);
     try {
-      // In a real app, this would be an API call to register
-      // Mock registration for demo purposes
-      const mockUser: User = {
-        id: "user-" + Date.now(),
-        name: name,
-        email: email,
-        role: "manager",
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-      };
-      
-      // Store user in localStorage for persistence
-      localStorage.setItem("marketix-user", JSON.stringify(mockUser));
-      setUser(mockUser);
-      router.push("/dashboard");
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Registration failed');
+      }
+
+      // After successful registration, sign in
+      await login(email, password);
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error('Registration error:', error);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("marketix-user");
-    setUser(null);
-    router.push("/login");
+  const updateProfile = async (data: { name?: string; email?: string }) => {
+    try {
+      const response = await fetch('/api/auth/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Profile update failed');
+      }
+
+      // Update user data in context
+      if (responseData.user) {
+        setUser(prev => prev ? { ...prev, ...responseData.user } : null);
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut({ redirect: false });
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      router.push('/login');
+    }
   };
 
   return (
